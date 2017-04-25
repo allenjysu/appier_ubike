@@ -1,13 +1,14 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+#!/usr/bin/env python
+
+import sys
+from apt.package import Record
+sys.path.append("..")
+
 import os
-import urllib
-import gzip
 import json
 import MySQLdb
-from datetime import datetime
-
-
+import math
 from ConfigParser import SafeConfigParser
 
 config_file = '../config/config.ini'
@@ -18,44 +19,67 @@ db_name = config.get('mysql', 'database')
 user = config.get('mysql', 'user')
 password = config.get('mysql', 'password')
 conn = MySQLdb.connect(host=db_host, user=user, passwd=password, db=db_name)
-
-url = config.get('ubike', 'url')
-# print "downloading with urllib"
-urllib.urlretrieve(url, "data.gz")
-f = gzip.open('data.gz', 'r')
-jdata = f.read()
-f.close()
-data = json.loads(jdata)
-c = conn.cursor()
 conn.set_character_set('utf8')
 
-for key, value in data["retVal"].iteritems():
-    sno = value["sno"]
-    sna = value["sna"]
-    tot = value["tot"]
-    sbi = value["sbi"]
-    sarea = value["sarea"]
-    mday = value["mday"]
-    lat = value["lat"]
-    lng = value["lng"]
-    ar = value["ar"]
-    sareaen = value["sareaen"]
-    snaen = value["snaen"]
-    aren = value["aren"]
-    bemp = value["bemp"]
-    act = value["act"]
 
-    sql = "INSERT INTO data(sno,tot,sbi,bemp,act,utime) VALUES(%s,%s,%s,%s,%s,%s)"
-    del_sql = "DELETE FROM data where sno = \"%s\"" % sno
-    try:
+def ubike_check(json_data):
+    # print "sample_create:",json_data
+    body = {}
+    aryStation = []
+    sql = "select info.sno ,sna , lat, lng , power( power (lat-%s,2) + power(lng-%s,2), 1.0/2) as dis , data.sbi as sbi, sna from info inner join data on data.sno = info.sno order by dis asc limit 3" % (
+        json_data["lat"], json_data["lng"])
+    c = conn.cursor()
+    c.execute(sql)
+    data = c.fetchall()
+    radius = triangleCircle(data)
+    for record in data:
+        station = record[6]
+        b = {
+            #"sno" : record[0],
+            "station": station,
+            "num_ubike": record[5]
+            #"sna" : record[1],
+            #"lat" : record[2],
+            #"lng" : record[3],
+            #"dit" : record[4]
+        }
+        aryStation.append(b)
 
-        c.execute(del_sql)
-        c.execute(sql, (sno, tot, sbi, bemp, act, datetime.now()))
-        conn.commit()
-    except MySQLdb.Error, e:
-        print "Mysql Error %d: %s" % (e.args[0], e.args[1])
-        pass
+    body["station"] = aryStation
+    body["radius"] = radius
+    body["taipei"] = is_inTaipei(radius, data)
+    body["full"] = is_full(json_data)
 
-    # print "NO." + sno + " " + sna
+    return body
 
-conn.close()
+
+def is_inTaipei(radius, data):
+    if data[0][4] - radius > 0.0 and data[1][4] - radius > 0.0 and data[2][4] - radius > 0.0:
+        return False
+    else:
+        return True
+
+
+def is_full(json_data):
+    sql = "select count(sno) as count from data where tot != sbi"
+    c = conn.cursor()
+    c.execute(sql)
+    data = c.fetchall()
+    return data[0][0]
+
+
+def triangleCircle(data):
+    x0 = float(data[0][2])
+    y0 = float(data[0][3])
+    x1 = float(data[1][2])
+    y1 = float(data[1][3])
+    x2 = float(data[2][2])
+    y2 = float(data[2][3])
+    a = math.sqrt(math.pow(x0 - x1, 2) + math.pow(y0 - y1, 2))
+    b = math.sqrt(math.pow(x1 - x2, 2) + math.pow(y1 - y2, 2))
+    c = math.sqrt(math.pow(x2 - x0, 2) + math.pow(y2 - y0, 2))
+
+    p = (a + b + c) / 2
+    S = math.sqrt(p * (p - a) * (p - b) * (p - c))
+    radius = a * b * c / (4 * S)
+    return radius

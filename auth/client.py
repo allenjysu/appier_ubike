@@ -2,7 +2,6 @@
 #!/usr/bin/env python
 
 import sys
-from apt.package import Record
 sys.path.append("..")
 
 import os
@@ -18,9 +17,6 @@ db_host = config.get('mysql', 'host')
 db_name = config.get('mysql', 'database')
 user = config.get('mysql', 'user')
 password = config.get('mysql', 'password')
-conn = MySQLdb.connect(host=db_host, user=user, passwd=password, db=db_name)
-conn.set_character_set('utf8')
-
 
 def ubike_check(json_data):
     # print "sample_create:",json_data
@@ -28,9 +24,8 @@ def ubike_check(json_data):
     aryStation = []
     sql = "select info.sno ,sna , lat, lng , power( power (lat-%s,2) + power(lng-%s,2), 1.0/2) as dis , data.sbi as sbi, sna from info inner join data on data.sno = info.sno order by dis asc limit 3" % (
         json_data["lat"], json_data["lng"])
-    c = conn.cursor()
-    c.execute(sql)
-    data = c.fetchall()
+
+    data = sql_command(sql)
     radius = triangleCircle(data)
     for record in data:
         station = record[6]
@@ -62,10 +57,19 @@ def is_inTaipei(radius, data):
 
 def is_full(json_data):
     sql = "select count(sno) as count from data where tot != sbi"
+    data = sql_command(sql)
+    return data[0][0]
+
+def sql_command(sql):
+    conn = MySQLdb.connect(host=db_host, user=user, passwd=password, db=db_name)
+    conn.set_character_set('utf8')
     c = conn.cursor()
     c.execute(sql)
     data = c.fetchall()
-    return data[0][0]
+    c.close()
+    conn.close()
+    #c.clouse()
+    return data
 
 
 def triangleCircle(data):

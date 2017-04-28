@@ -1,8 +1,15 @@
 #! /usr/bin/env python
 """
 :author: Allen Su <civin.su@gmail.com>
+:test_connand :  curl "http://127.0.0.1:9888/v1/ubike-station/taipei?lat=25.034153&lng=121.568" 
+                -X GET -i 
+                -H "Content-Type:application/json" 
+                -H "Accept:application/json"
+
 """
 import json
+import sys
+
 from auth import client
 from flask import Flask, request, jsonify
 from werkzeug.serving import run_simple
@@ -27,6 +34,7 @@ def get_object_usage():
     except ValueError:
         code = -1
     except:
+        print("Unexpected error:", sys.exc_info()[0])
         code = -3
     finally:
         if code in [0, 1]:

@@ -10,7 +10,7 @@ import MySQLdb
 import math
 from ConfigParser import SafeConfigParser
 
-config_file = '../config/config.ini'
+config_file = '/etc/appierubike/config.ini'
 config = SafeConfigParser(os.environ)
 config.read(config_file)
 db_host = config.get('mysql', 'host')
